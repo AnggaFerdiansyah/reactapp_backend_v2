@@ -89,8 +89,8 @@ async function createUser(req, res) {
 // });
 
 router.post("/register", async (req, res) => {
-  if (process.env.NODE_ENV !== "production") {
-    req.body.role = "admin"; // 🔥 admin untuk testing
+  if (process.env.ALLOW_PUBLIC_REGISTER === "true") {
+    req.body.role = "admin";
     return createUser(req, res);
   }
 
@@ -98,6 +98,7 @@ router.post("/register", async (req, res) => {
     authorizeRole("admin")(req, res, () => createUser(req, res))
   );
 });
+
 
 
 
