@@ -10,10 +10,10 @@ const sessionRoutes = require("../routes/sessionRoutes");
 const app = express();
 
 /* =========================
-   MIDDLEWARE (WAJIB DI ATAS)
+   MIDDLEWARE WAJIB
 ========================= */
 app.use(cors());
-app.use(express.json()); // 🔥 INI KRUSIAL
+app.use(express.json()); // 🔥 INI YANG KURANG
 app.use(express.urlencoded({ extended: true }));
 
 /* =========================
@@ -25,10 +25,15 @@ app.use("/api/logs", logRoutes);
 app.use("/api/sessions", sessionRoutes);
 
 /* =========================
-   ROOT CHECK
+   TEST ROOT
 ========================= */
 app.get("/", (req, res) => {
-  res.json({ status: "API running" });
+  res.json({ message: "API is running" });
 });
+
+/* =========================
+   DB (JANGAN LISTEN)
+========================= */
+mongoose.connect(process.env.MONGO_URI);
 
 module.exports = app;
