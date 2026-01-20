@@ -5,6 +5,49 @@ const User = require("../models/user");
 const Session = require("../models/session");
 const { authenticateToken, authorizeRole } = require("../middleware/auth");
 
+async function createUser(req, res) {
+  let { name, username, password, role } = req.body;
+
+  if (!name || !username || !password) {
+    return res.status(400).json({
+      error: "Nama, username, dan password wajib diisi",
+    });
+  }
+
+  username = username.trim().toLowerCase();
+
+  const existingUser = await User.findOne({ username });
+  if (existingUser) {
+    return res.status(400).json({
+      error: "Username sudah digunakan",
+    });
+  }
+
+  // 🔒 PRODUKSI: role selalu staff
+  if (process.env.ALLOW_PUBLIC_REGISTER !== "true") {
+    role = "staff";
+  }
+
+  // 🧪 TESTING: boleh admin
+  if (!["admin", "staff"].includes(role)) {
+    role = "staff";
+  }
+
+  const newUser = new User({
+    name,
+    username,
+    password,
+    role,
+  });
+
+  await newUser.save();
+
+  res.status(201).json({
+    message: "User berhasil didaftarkan",
+    role: newUser.role,
+  });
+}
+
 /* =========================
    REGISTER USER (ADMIN ONLY)
 ========================= */
@@ -40,38 +83,13 @@ const { authenticateToken, authorizeRole } = require("../middleware/auth");
 // });
 
 router.post("/register", async (req, res) => {
-  let { name, username, password } = req.body;
-
-  if (!name || !username || !password) {
-    return res.status(400).json({
-      error: "Nama, username, dan password wajib diisi",
-    });
+  if (process.env.ALLOW_PUBLIC_REGISTER !== "true") {
+    return authenticateToken(req, res, () =>
+      authorizeRole("admin")(req, res, () => createUser(req, res))
+    );
   }
 
-  try {
-    const existingUser = await User.findOne({ username });
-    if (existingUser) {
-      return res.status(400).json({
-        error: "Username sudah digunakan",
-      });
-    }
-
-    const newUser = new User({
-      name,
-      username,
-      password,
-      role: "admin",
-    });
-
-    await newUser.save();
-
-    res.status(201).json({
-      message: "Register admin berhasil (testing mode)",
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Gagal register" });
-  }
+  return createUser(req, res);
 });
 
 
