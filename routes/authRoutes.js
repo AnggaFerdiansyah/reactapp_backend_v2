@@ -9,27 +9,19 @@ const { authenticateToken, authorizeRole } = require("../middleware/auth");
    REGISTER USER (ADMIN ONLY)
 ========================= */
 router.post("/login", async (req, res) => {
-  console.log("🔥 LOGIN HIT");
-  console.log("🔥 BODY:", req.body);
-  console.log("🔥 ENV JWT:", process.env.JWT_SECRET ? "ADA" : "TIDAK ADA");
-
   try {
-    const { username, password } = req.body;
+    const { username, password } = req.body || {};
 
     if (!username || !password) {
-      return res.status(400).json({ message: "Username / password kosong" });
+      return res.status(400).json({ message: "Username dan password wajib diisi" });
     }
 
     const user = await User.findOne({ username });
-    console.log("🔥 USER:", user ? "KETEMU" : "TIDAK");
-
     if (!user) {
       return res.status(400).json({ message: "User tidak ditemukan" });
     }
 
     const match = await user.comparePassword(password);
-    console.log("🔥 MATCH:", match);
-
     if (!match) {
       return res.status(400).json({ message: "Password salah" });
     }
@@ -40,12 +32,13 @@ router.post("/login", async (req, res) => {
       { expiresIn: "1h" }
     );
 
-    return res.json({ token });
+    res.json({ token, user });
   } catch (err) {
     console.error("❌ LOGIN ERROR FULL:", err);
-    return res.status(500).json({ message: "Internal Server Error" });
+    res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
 
 
 /* =========================
