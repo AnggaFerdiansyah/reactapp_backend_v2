@@ -6,47 +6,53 @@ const Session = require("../models/session");
 const { authenticateToken, authorizeRole } = require("../middleware/auth");
 
 async function createUser(req, res) {
-  let { name, username, password, role } = req.body;
+  try {
+    let { name, username, password, role } = req.body;
 
-  if (!name || !username || !password) {
-    return res.status(400).json({
-      error: "Nama, username, dan password wajib diisi",
+    if (!name || !username || !password) {
+      return res.status(400).json({
+        error: "Nama, username, dan password wajib diisi",
+      });
+    }
+
+    username = username.trim().toLowerCase();
+
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      return res.status(400).json({
+        error: "Username sudah digunakan",
+      });
+    }
+
+    // ⛔ PRODUKSI: role dipaksa staff
+    if (process.env.NODE_ENV === "production") {
+      role = "staff";
+    }
+
+    // 🧪 TESTING: admin diizinkan
+    if (!["admin", "staff"].includes(role)) {
+      role = "staff";
+    }
+
+    const newUser = new User({
+      name,
+      username,
+      password,
+      role,
     });
-  }
 
-  username = username.trim().toLowerCase();
+    await newUser.save();
 
-  const existingUser = await User.findOne({ username });
-  if (existingUser) {
-    return res.status(400).json({
-      error: "Username sudah digunakan",
+    res.status(201).json({
+      message: "User berhasil didaftarkan",
+      role: newUser.role,
     });
+  } catch (err) {
+    console.error("REGISTER ERROR:", err);
+    res.status(500).json({ error: "Gagal mendaftarkan user" });
   }
-
-  // 🔒 PRODUKSI: role selalu staff
-  if (process.env.ALLOW_PUBLIC_REGISTER !== "true") {
-    role = "staff";
-  }
-
-  // 🧪 TESTING: boleh admin
-  if (!["admin", "staff"].includes(role)) {
-    role = "staff";
-  }
-
-  const newUser = new User({
-    name,
-    username,
-    password,
-    role,
-  });
-
-  await newUser.save();
-
-  res.status(201).json({
-    message: "User berhasil didaftarkan",
-    role: newUser.role,
-  });
 }
+
 
 /* =========================
    REGISTER USER (ADMIN ONLY)
@@ -83,14 +89,16 @@ async function createUser(req, res) {
 // });
 
 router.post("/register", async (req, res) => {
-  if (process.env.ALLOW_PUBLIC_REGISTER !== "true") {
-    return authenticateToken(req, res, () =>
-      authorizeRole("admin")(req, res, () => createUser(req, res))
-    );
+  if (process.env.NODE_ENV !== "production") {
+    req.body.role = "admin"; // 🔥 admin untuk testing
+    return createUser(req, res);
   }
 
-  return createUser(req, res);
+  return authenticateToken(req, res, () =>
+    authorizeRole("admin")(req, res, () => createUser(req, res))
+  );
 });
+
 
 
 /* =========================
