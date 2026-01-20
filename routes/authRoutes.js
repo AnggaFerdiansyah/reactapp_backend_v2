@@ -8,37 +8,71 @@ const { authenticateToken, authorizeRole } = require("../middleware/auth");
 /* =========================
    REGISTER USER (ADMIN ONLY)
 ========================= */
-router.post("/login", async (req, res) => {
+// router.post("/login", async (req, res) => {
+//   try {
+//     const { username, password } = req.body || {};
+
+//     if (!username || !password) {
+//       return res.status(400).json({ message: "Username dan password wajib diisi" });
+//     }
+
+//     const user = await User.findOne({ username });
+//     if (!user) {
+//       return res.status(400).json({ message: "User tidak ditemukan" });
+//     }
+
+//     const match = await user.comparePassword(password);
+//     if (!match) {
+//       return res.status(400).json({ message: "Password salah" });
+//     }
+
+//     const token = jwt.sign(
+//       { id: user._id, role: user.role },
+//       process.env.JWT_SECRET,
+//       { expiresIn: "1h" }
+//     );
+
+//     res.json({ token, user });
+//   } catch (err) {
+//     console.error("❌ LOGIN ERROR FULL:", err);
+//     res.status(500).json({ message: "Internal Server Error" });
+//   }
+// });
+
+router.post("/register", async (req, res) => {
+  let { name, username, password } = req.body;
+
+  if (!name || !username || !password) {
+    return res.status(400).json({
+      error: "Nama, username, dan password wajib diisi",
+    });
+  }
+
   try {
-    const { username, password } = req.body || {};
-
-    if (!username || !password) {
-      return res.status(400).json({ message: "Username dan password wajib diisi" });
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      return res.status(400).json({
+        error: "Username sudah digunakan",
+      });
     }
 
-    const user = await User.findOne({ username });
-    if (!user) {
-      return res.status(400).json({ message: "User tidak ditemukan" });
-    }
+    const newUser = new User({
+      name,
+      username,
+      password,
+      role: "admin",
+    });
 
-    const match = await user.comparePassword(password);
-    if (!match) {
-      return res.status(400).json({ message: "Password salah" });
-    }
+    await newUser.save();
 
-    const token = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "1h" }
-    );
-
-    res.json({ token, user });
+    res.status(201).json({
+      message: "Register admin berhasil (testing mode)",
+    });
   } catch (err) {
-    console.error("❌ LOGIN ERROR FULL:", err);
-    res.status(500).json({ message: "Internal Server Error" });
+    console.error(err);
+    res.status(500).json({ error: "Gagal register" });
   }
 });
-
 
 
 /* =========================
