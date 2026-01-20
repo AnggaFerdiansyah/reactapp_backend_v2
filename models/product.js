@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 
-// Definisi schema untuk Produk
 const productSchema = new mongoose.Schema(
   {
     name: {
@@ -23,13 +22,19 @@ const productSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+
+    isArchived: {
+      type: Boolean,
+      default: false,
+    },
+    archivedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
   }
 );
 
-// Membuat model dari schema di atas
-const Product = mongoose.model("Product", productSchema);
-
-module.exports = Product;
+module.exports = mongoose.model("Product", productSchema);

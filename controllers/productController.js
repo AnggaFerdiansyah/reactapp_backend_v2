@@ -8,7 +8,7 @@ const createProduct = (req, res) => {
   const { name, code, stock, unit, color } = req.body;
 
   const newProduct = {
-    id: Date.now(), // simple ID, nanti diganti dengan DB
+    id: Date.now(),
     name,
     code,
     stock: parseInt(stock),

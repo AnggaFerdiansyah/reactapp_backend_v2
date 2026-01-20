@@ -1,41 +1,74 @@
-// 📁 routes/productRoutes.js
 const express = require("express");
 const router = express.Router();
 const Product = require("../models/product");
-const { authMiddleware } = require("../middleware/auth");
+const { authenticateToken, authorizeRole } = require("../middleware/auth");
 
-// ✅ Get all products (protected)
-router.get("/all", authMiddleware, async (req, res) => {
+/* =========================
+   GET PRODUK AKTIF (INVENTORY)
+========================= */
+// GET PRODUK AKTIF (TERMASUK DATA LAMA)
+router.get("/all", authenticateToken, async (req, res) => {
   try {
-    const products = await Product.find().sort({ createdAt: -1 });
+    const products = await Product.find({
+      $or: [
+        { isArchived: false },
+        { isArchived: { $exists: false } }, // 🔥 DATA LAMA MASUK
+      ],
+    }).sort({ createdAt: -1 });
+
     res.json(products);
   } catch (err) {
-    res.status(400).send("Error fetching products: " + err);
+    console.error("❌ Gagal mengambil produk:", err);
+    res.status(500).json({ error: "Gagal mengambil data produk" });
   }
 });
 
-// ✅ Add new product (protected)
-router.post("/", authMiddleware, async (req, res) => {
-  const { name, code, stock, unit, color } = req.body;
-
-  const newProduct = new Product({
-    name,
-    code,
-    stock,
-    unit,
-    color,
-  });
-
+/* =========================
+   GET PRODUK ARSIP
+========================= */
+router.get("/archived", authenticateToken, async (req, res) => {
   try {
-    await newProduct.save();
-    res.status(201).json(newProduct);
+    const products = await Product.find({ isArchived: true }).sort({
+      archivedAt: -1,
+    });
+
+    res.json(products);
   } catch (err) {
-    res.status(400).send("Error adding product: " + err);
+    console.error("❌ Gagal mengambil arsip:", err);
+    res.status(500).json({ error: "Gagal mengambil data arsip" });
   }
 });
 
-// ✅ Update product by ID (protected)
-router.put("/:id", authMiddleware, async (req, res) => {
+/* =========================
+   TAMBAH PRODUK
+========================= */
+router.post(
+  "/",
+  authenticateToken,
+  authorizeRole("admin", "staff"),
+  async (req, res) => {
+    try {
+      const product = await Product.create(req.body);
+
+      res.status(201).json({
+        success: true,
+        message: "Produk berhasil ditambahkan",
+        product,
+      });
+    } catch (err) {
+      console.error("❌ Gagal menambahkan produk:", err);
+      res.status(400).json({
+        success: false,
+        message: "Gagal menambahkan produk",
+      });
+    }
+  }
+);
+
+/* =========================
+   UPDATE PRODUK
+========================= */
+router.put("/:id", authenticateToken, async (req, res) => {
   const { name, code, stock, unit, color } = req.body;
 
   try {
@@ -46,28 +79,109 @@ router.put("/:id", authMiddleware, async (req, res) => {
     );
 
     if (!updatedProduct) {
-      return res.status(404).send("Product Not Found");
+      return res.status(404).json({ error: "Produk tidak ditemukan" });
     }
 
-    res.json(updatedProduct);
+    res.json({
+      message: "Produk berhasil diperbarui",
+      product: updatedProduct,
+    });
   } catch (err) {
-    res.status(400).send("Error updating product: " + err);
+    console.error("❌ Gagal memperbarui produk:", err);
+    res.status(400).json({ error: "Gagal memperbarui produk" });
   }
 });
 
-// ✅ Delete product by ID (protected)
-router.delete("/:id", authMiddleware, async (req, res) => {
+/* =========================
+   SOFT DELETE (ARSIP)
+========================= */
+router.delete("/:id", authenticateToken, async (req, res) => {
   try {
-    const deletedProduct = await Product.findByIdAndDelete(req.params.id);
+    const product = await Product.findById(req.params.id);
 
-    if (!deletedProduct) {
-      return res.status(404).send("Produk tidak ditemukan");
+    if (!product) {
+      return res.status(404).json({ error: "Produk tidak ditemukan" });
     }
 
-    res.json({ message: "Produk berhasil dihapus", product: deletedProduct });
+    product.isArchived = true;
+    product.archivedAt = new Date();
+    await product.save();
+
+    res.json({
+      success: true,
+      message: "Produk berhasil diarsipkan",
+      product,
+    });
   } catch (err) {
-    res.status(400).send("Error deleting product: " + err);
+    console.error("❌ Gagal mengarsipkan produk:", err);
+    res.status(500).json({ error: "Gagal mengarsipkan produk" });
   }
 });
+/* =========================
+   RESTORE PRODUK (UN-ARCHIVE)
+========================= */
+router.put(
+  "/:id/restore",
+  authenticateToken,
+  authorizeRole("admin"),
+  async (req, res) => {
+    try {
+      const product = await Product.findById(req.params.id);
+
+      if (!product) {
+        return res.status(404).json({ error: "Produk tidak ditemukan" });
+      }
+
+      product.isArchived = false;
+      product.archivedAt = null;
+      await product.save();
+
+      res.json({
+        success: true,
+        message: "Produk berhasil dipulihkan",
+        product,
+      });
+    } catch (err) {
+      console.error("❌ Gagal memulihkan produk:", err);
+      res.status(500).json({ error: "Gagal memulihkan produk" });
+    }
+  }
+);
+/* =========================
+   HARD DELETE (ARCHIVE ONLY)
+========================= */
+router.delete(
+  "/:id/hard",
+  authenticateToken,
+  authorizeRole("admin"),
+  async (req, res) => {
+    try {
+      const product = await Product.findById(req.params.id);
+
+      if (!product) {
+        return res.status(404).json({ error: "Produk tidak ditemukan" });
+      }
+
+      // 🔒 WAJIB sudah arsip
+      if (!product.isArchived) {
+        return res.status(400).json({
+          error: "Produk belum diarsipkan",
+        });
+      }
+
+      await product.deleteOne();
+
+      res.json({
+        success: true,
+        message: "Produk berhasil dihapus permanen",
+      });
+    } catch (err) {
+      console.error("❌ Hard delete gagal:", err);
+      res.status(500).json({
+        error: "Gagal menghapus produk secara permanen",
+      });
+    }
+  }
+);
 
 module.exports = router;
