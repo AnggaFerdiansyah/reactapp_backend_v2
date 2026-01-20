@@ -1,3 +1,2 @@
-import app from "../app.js";
-
-export default app;
+const app = require("../app");
+module.exports = app;
