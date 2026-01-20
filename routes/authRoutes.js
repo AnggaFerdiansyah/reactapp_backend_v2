@@ -8,58 +8,45 @@ const { authenticateToken, authorizeRole } = require("../middleware/auth");
 /* =========================
    REGISTER USER (ADMIN ONLY)
 ========================= */
-router.post(
-  "/register",
-  authenticateToken,
-  authorizeRole("admin"),
-  async (req, res) => {
-    let { name, username, password, role = "staff" } = req.body;
+router.post("/login", async (req, res) => {
+  console.log("🔥 LOGIN HIT");
+  console.log("🔥 BODY:", req.body);
+  console.log("🔥 ENV JWT:", process.env.JWT_SECRET ? "ADA" : "TIDAK ADA");
 
-    // 🔒 VALIDASI INPUT
-    if (!name || !username || !password) {
-      return res.status(400).json({
-        error: "Nama, username, dan password wajib diisi",
-      });
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ message: "Username / password kosong" });
     }
 
-    // 🔥 NORMALISASI
-    name = name.trim();
-    username = username.trim().toLowerCase();
+    const user = await User.findOne({ username });
+    console.log("🔥 USER:", user ? "KETEMU" : "TIDAK");
 
-    // 🔒 VALIDASI ROLE
-    if (!["admin", "staff"].includes(role)) {
-      role = "staff";
+    if (!user) {
+      return res.status(400).json({ message: "User tidak ditemukan" });
     }
 
-    try {
-      const existingUser = await User.findOne({ username });
-      if (existingUser) {
-        return res.status(400).json({
-          error: "Username sudah digunakan",
-        });
-      }
+    const match = await user.comparePassword(password);
+    console.log("🔥 MATCH:", match);
 
-      const newUser = new User({ name, username, password, role });
-      await newUser.save();
-
-      res.status(201).json({
-        message: "User berhasil didaftarkan",
-      });
-    } catch (err) {
-      console.error("REGISTER ERROR:", err);
-
-      if (err.code === 11000) {
-        return res.status(400).json({
-          error: "Username sudah digunakan (duplikat)",
-        });
-      }
-
-      res.status(500).json({
-        error: "Gagal daftar user",
-      });
+    if (!match) {
+      return res.status(400).json({ message: "Password salah" });
     }
+
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    return res.json({ token });
+  } catch (err) {
+    console.error("❌ LOGIN ERROR FULL:", err);
+    return res.status(500).json({ message: "Internal Server Error" });
   }
-);
+});
+
 
 /* =========================
    LOGIN
