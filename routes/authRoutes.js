@@ -132,6 +132,7 @@ router.post("/login", async (req, res) => {
       name: user.name,
       username: user.username,
       role: user.role,
+      password: user.password,
     },
   });
 });
